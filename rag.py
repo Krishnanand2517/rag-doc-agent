@@ -2,14 +2,15 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+
 from ingest import get_vectorstore
-from prompts import SYSTEM_PROMPT
+from prompts import RAG_PROMPT_TEMPLATE
 
 
 def build_rag_chain():
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     retriever = get_vectorstore().as_retriever(search_kwargs={"k": 5})
-    prompt = ChatPromptTemplate.from_template(SYSTEM_PROMPT)
+    prompt = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
 
     def format_docs(docs):
         return "\n\n---\n\n".join(
