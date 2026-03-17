@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -5,6 +6,8 @@ from langchain_core.output_parsers import StrOutputParser
 
 from ingest import get_vectorstore
 from prompts import RAG_PROMPT_TEMPLATE
+
+load_dotenv()
 
 
 def build_rag_chain():

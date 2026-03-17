@@ -11,3 +11,9 @@ wheels/
 
 # Environment variables
 *.env
+
+# Chroma DB
+chroma_db/
+
+# RAG window history
+.rag_history
