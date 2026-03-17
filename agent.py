@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from pydantic_ai import Agent, Tool
 from pydantic_ai.models.openai import OpenAIResponsesModel
 
@@ -6,7 +5,6 @@ from rag import build_rag_chain
 from ingest import get_vectorstore
 from prompts import SYSTEM_PROMPT
 
-load_dotenv()
 
 model = OpenAIResponsesModel("gpt-4o-mini")
 rag_chain = build_rag_chain()

@@ -9,9 +9,9 @@ from rich.spinner import Spinner
 from rich.live import Live
 import typer
 
-from agent import agent
-
 load_dotenv()
+from agent import agent  # noqa: E402
+
 
 console = Console()
 app = typer.Typer()
