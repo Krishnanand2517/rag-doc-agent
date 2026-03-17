@@ -1,0 +1,18 @@
+[project]
+name = "rag-doc-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.5.5",
+    "httpx>=0.28.1",
+    "langchain>=1.2.12",
+    "langchain-community>=0.4.1",
+    "langchain-openai>=1.1.11",
+    "pydantic-ai>=1.69.0",
+    "pypdf>=6.9.1",
+    "rich>=14.3.3",
+    "typer>=0.24.1",
+    "uvicorn>=0.42.0",
+]
