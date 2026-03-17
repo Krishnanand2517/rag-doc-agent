@@ -9,6 +9,17 @@ model = OpenAIResponsesModel("gpt-4o-mini")
 rag_chain = build_rag_chain()
 
 
+def _list_documents_impl() -> str:
+    vs = get_vectorstore()
+    sources = set()
+    data = vs.get()
+
+    for meta in data["metadatas"]:
+        sources.add(meta.get("source", "unknown"))
+
+    return "\n".join(sources) or "No documents ingested yet."
+
+
 @Tool
 def search_knowledge_base(query: str) -> str:
     """Search the personal knowledge base for relevant information."""
@@ -18,14 +29,7 @@ def search_knowledge_base(query: str) -> str:
 @Tool
 def list_documents() -> str:
     """List all documents in the knowledge base."""
-    vs = get_vectorstore()
-    sources = set()
-    data = vs.get()
-
-    for meta in data["metadatas"]:
-        sources.add(meta.get("source", "unknown"))
-
-    return "\n".join(sources) or "No documents ingested yet."
+    return _list_documents_impl()
 
 
 agent = Agent(
