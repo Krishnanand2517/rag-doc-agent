@@ -1,11 +1,12 @@
 from dotenv import load_dotenv
 import asyncio
+from collections import Counter
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from rich.console import Console
 from rich.live import Live
-from rich.markdown import Markdown
+from rich.spinner import Spinner
 from rich.panel import Panel
 from rich.text import Text
 import typer
@@ -21,9 +22,15 @@ app = typer.Typer()
 def stream_answer(question: str):
     async def _stream():
         content = ""
+        tools_used = []
+        seen = set()
 
         with Live(
-            Panel("...", title="Agent", border_style="purple"),
+            Panel(
+                Spinner("dots", text="Thinking..."),
+                title="Agent",
+                border_style="purple",
+            ),
             console=console,
             refresh_per_second=10,
         ) as live:
@@ -31,29 +38,30 @@ def stream_answer(question: str):
                 async for chunk in response.stream_text(delta=True):
                     content += chunk
 
-                    live.update(
-                        Panel(
-                            Markdown(content),
-                            title="Agent",
-                            border_style="purple",
-                            padding=(1, 2),
+                    # Check for new tool usage during streaming
+                    for msg in response.all_messages():
+                        for part in getattr(msg, "parts", []):
+                            tool_name = getattr(part, "tool_name", None)
+
+                            if tool_name and tool_name not in seen:
+                                seen.add(tool_name)
+                                tools_used.append(tool_name)
+
+                    tool_display = ""
+
+                    if tools_used:
+                        counts = Counter(tools_used)
+
+                        tool_display = (
+                            "\n\n[dim]Tools used: "
+                            + ", ".join(
+                                f"{tool} ({count})" if count > 1 else tool
+                                for tool, count in counts.items()
+                            )
+                            + "[/dim]"
                         )
-                    )
 
-                # Show tool usage
-                tools_used = []
-                for msg in response.all_messages():
-                    for part in getattr(msg, "parts", []):
-                        tool_name = getattr(part, "tool_name", None)
-
-                        if tool_name:
-                            tools_used.append(tool_name)
-
-                if tools_used:
-                    tool_text = (
-                        "\n\n[dim]Tools used: " + ", ".join(tools_used) + "[/dim]"
-                    )
-                    renderable = Text.from_markup(content + tool_text)
+                    renderable = Text.from_markup(content + tool_display)
 
                     live.update(
                         Panel(
