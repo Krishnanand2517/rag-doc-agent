@@ -1,12 +1,13 @@
 from dotenv import load_dotenv
+import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.spinner import Spinner
-from rich.live import Live
+from rich.text import Text
 import typer
 
 load_dotenv()
@@ -18,17 +19,55 @@ app = typer.Typer()
 
 
 def stream_answer(question: str):
-    with Live(Spinner("dots", text="Thinking..."), console=console, transient=True):
-        result = agent.run_sync(question)
+    async def _stream():
+        content = ""
 
-    console.print(
-        Panel(
-            Markdown(result.output),
-            title="[bold purple]Agent[/bold purple]",
-            border_style="purple",
-            padding=(1, 2),
-        )
-    )
+        with Live(
+            Panel("...", title="Agent", border_style="purple"),
+            console=console,
+            refresh_per_second=10,
+        ) as live:
+            async with agent.run_stream(question) as response:
+                async for chunk in response.stream_text(delta=True):
+                    content += chunk
+
+                    live.update(
+                        Panel(
+                            Markdown(content),
+                            title="Agent",
+                            border_style="purple",
+                            padding=(1, 2),
+                        )
+                    )
+
+                # Show tool usage
+                tools_used = []
+                for msg in response.all_messages():
+                    for part in getattr(msg, "parts", []):
+                        tool_name = getattr(part, "tool_name", None)
+
+                        if tool_name:
+                            tools_used.append(tool_name)
+
+                if tools_used:
+                    tool_text = (
+                        "\n\n[dim]Tools used: " + ", ".join(tools_used) + "[/dim]"
+                    )
+                    renderable = Text.from_markup(content + tool_text)
+
+                    live.update(
+                        Panel(
+                            renderable,
+                            title="Agent",
+                            border_style="purple",
+                            padding=(1, 2),
+                        )
+                    )
+
+    try:
+        asyncio.run(_stream())
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
 
 
 @app.command()
