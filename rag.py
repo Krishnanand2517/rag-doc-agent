@@ -1,16 +1,45 @@
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
+from langchain_classic.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
 
+from util import _to_str
 from ingest import get_vectorstore
-from prompts import RAG_PROMPT_TEMPLATE
+from prompts import RAG_PROMPT_TEMPLATE, HYDE_PROMPT
+
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+
+def make_hypothetical_doc(question: str) -> str:
+    """Generate a fake ideal answer (HyDE) to improve embedding similarity."""
+    prompt = HYDE_PROMPT.format(question=question)
+    content = llm.invoke(prompt).content
+
+    return _to_str(content)
 
 
 def build_rag_chain():
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    retriever = get_vectorstore().as_retriever(search_kwargs={"k": 5})
-    prompt = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
+    vs = get_vectorstore()
+
+    # Vector Retriever
+    vector_retriever = vs.as_retriever(search_kwargs={"k": 5})
+
+    # BM25 Retriever
+    all_docs = vs.get()
+    bm25_retriever = BM25Retriever.from_texts(
+        all_docs["documents"], metadatas=all_docs["metadatas"]
+    )
+    bm25_retriever.k = 5
+
+    # Hybrid Retriever
+    hybrid_retriever = EnsembleRetriever(
+        retrievers=[vector_retriever, bm25_retriever], weights=[0.6, 0.4]
+    )
+
+    def retrieve_with_hyde(question: str):
+        hypothetical = make_hypothetical_doc(question)
+        return hybrid_retriever.invoke(hypothetical)
 
     def format_docs(docs):
         return "\n\n---\n\n".join(
@@ -18,8 +47,11 @@ def build_rag_chain():
         )
 
     chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
+        {
+            "context": RunnableLambda(retrieve_with_hyde) | format_docs,
+            "question": RunnablePassthrough(),
+        }
+        | RAG_PROMPT_TEMPLATE
         | llm
         | StrOutputParser()
     )
