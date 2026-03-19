@@ -4,11 +4,13 @@ from collections import Counter
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from rich.console import Console
+from rich.console import Console, Group
+from rich.markdown import Markdown
 from rich.live import Live
 from rich.spinner import Spinner
 from rich.panel import Panel
 from rich.text import Text
+from rich.rule import Rule
 import typer
 
 load_dotenv()
@@ -52,16 +54,16 @@ def stream_answer(question: str):
                     if tools_used:
                         counts = Counter(tools_used)
 
-                        tool_display = (
-                            "\n\n[dim]Tools used: "
-                            + ", ".join(
-                                f"{tool} ({count})" if count > 1 else tool
-                                for tool, count in counts.items()
-                            )
-                            + "[/dim]"
+                        tool_display = "\n\nTools used: " + ", ".join(
+                            f"{tool} ({count})" if count > 1 else tool
+                            for tool, count in counts.items()
                         )
 
-                    renderable = Text.from_markup(content + tool_display)
+                    renderable = Group(
+                        Markdown(content),
+                        Rule(style="dim") if tool_display else Text(""),
+                        Text(tool_display, style="dim") if tool_display else Text(""),
+                    )
 
                     live.update(
                         Panel(
