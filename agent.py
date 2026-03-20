@@ -10,10 +10,19 @@ from prompts import build_system_prompt, REWRITE_QUERY_PROMPT, MULTI_QUERY_PROMP
 model = OpenAIResponsesModel("gpt-4o-mini")
 rag_chain = build_rag_chain()
 
+conversation_history = []
+
 
 def rewrite_query(vague_query: str) -> str:
     """Turn a vague user question into a precise search query."""
-    prompt = REWRITE_QUERY_PROMPT.format(vague_query=vague_query)
+    history_text = (
+        "\n".join(f"{role}: {msg}" for role, msg in conversation_history[-6:])
+        or "No prior conversation."
+    )
+
+    prompt = REWRITE_QUERY_PROMPT.format(
+        history_text=history_text, vague_query=vague_query
+    )
     content = llm.invoke(prompt).content
 
     return _to_str(content).strip()

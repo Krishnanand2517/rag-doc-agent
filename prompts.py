@@ -1,9 +1,15 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-REWRITE_QUERY_PROMPT = """Rewrite this question into a precise, keyword-rich search query 
-for a document retrieval system. Remove filler words. Expand abbreviations.
-If the question is vague (e.g. 'that thing from earlier', 'the document'),
-make it as specific as possible based on what's likely being asked.
+REWRITE_QUERY_PROMPT = """You are helping rewrite a search query for a local document retrieval system.
+The user's knowledge base contains ingested documents — NOT external URLs or web resources.
+Any reference to "that paper", "the document", "that file" means something already ingested locally.
+
+Recent conversation:
+{history_text}
+
+Rewrite the query below into a precise, keyword-rich search query.
+Resolve vague references using the conversation history.
+Return ONLY the rewritten query, nothing else.
 
 Original: {vague_query}
 Rewritten:"""

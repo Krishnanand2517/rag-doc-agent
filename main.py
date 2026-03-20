@@ -14,7 +14,7 @@ from rich.rule import Rule
 import typer
 
 load_dotenv()
-from agent import agent  # noqa: E402
+from agent import agent, conversation_history  # noqa: E402
 
 
 console = Console()
@@ -26,8 +26,10 @@ asyncio.set_event_loop(_loop)
 
 
 def stream_answer(question: str):
+    content = ""
+
     async def _stream():
-        content = ""
+        nonlocal content
         tools_used = []
         seen = set()
         last_msg_len = 0
@@ -87,6 +89,9 @@ def stream_answer(question: str):
     try:
         # Reuse the same loop
         _loop.run_until_complete(_stream())
+
+        conversation_history.append(("user", question))
+        conversation_history.append(("assistant", content[:300]))
     except asyncio.CancelledError:
         pass
     except Exception as e:
