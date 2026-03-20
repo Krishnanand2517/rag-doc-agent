@@ -21,25 +21,28 @@ def make_hypothetical_doc(question: str) -> str:
 
 def build_rag_chain():
     vs = get_vectorstore()
+    all_docs = vs.get()
 
     # Vector Retriever
     vector_retriever = vs.as_retriever(search_kwargs={"k": 5})
 
-    # BM25 Retriever
-    all_docs = vs.get()
-    bm25_retriever = BM25Retriever.from_texts(
-        all_docs["documents"], metadatas=all_docs["metadatas"]
-    )
-    bm25_retriever.k = 5
+    # BM25 Retriever (only if documents exist)
+    if all_docs["documents"]:
+        bm25_retriever = BM25Retriever.from_texts(
+            all_docs["documents"], metadatas=all_docs["metadatas"]
+        )
+        bm25_retriever.k = 5
 
-    # Hybrid Retriever
-    hybrid_retriever = EnsembleRetriever(
-        retrievers=[vector_retriever, bm25_retriever], weights=[0.6, 0.4]
-    )
+        # Hybrid Retriever
+        retriever = EnsembleRetriever(
+            retrievers=[vector_retriever, bm25_retriever], weights=[0.6, 0.4]
+        )
+    else:
+        retriever = vector_retriever  # fall back to vector-only
 
     def retrieve_with_hyde(question: str):
         hypothetical = make_hypothetical_doc(question)
-        return hybrid_retriever.invoke(hypothetical)
+        return retriever.invoke(hypothetical)
 
     def format_docs(docs):
         return "\n\n---\n\n".join(

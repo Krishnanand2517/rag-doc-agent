@@ -39,7 +39,7 @@ def ingest(source: str, source_type: str = "pdf"):
 
     vs = get_vectorstore()
 
-    print(f"[bold]Embedding {source}...[/bold]")
+    print(f"\n[bold]Embedding {source}...[/bold]")
 
     with Progress(
         SpinnerColumn(),
@@ -56,6 +56,11 @@ def ingest(source: str, source_type: str = "pdf"):
             progress.advance(task, len(batch))
 
     print(f"[green]Done. {len(chunks)} chunks ingested from {source}[/green]")
+
+    # Rebuild so BM25 includes the new documents
+    import agent as agent_module
+
+    agent_module.rag_chain = agent_module.build_rag_chain()
 
 
 if __name__ == "__main__":
