@@ -20,86 +20,70 @@ from agent import agent, conversation_history  # noqa: E402
 console = Console()
 app = typer.Typer()
 
-# One persistent loop for the entire session
-_loop = asyncio.new_event_loop()
-asyncio.set_event_loop(_loop)
 
-
-def stream_answer(question: str):
+async def stream_answer(question: str):
     content = ""
+    tools_used = []
+    seen = set()
+    last_msg_len = 0
 
-    async def _stream():
-        nonlocal content
-        tools_used = []
-        seen = set()
-        last_msg_len = 0
+    with Live(
+        Panel(
+            Spinner("dots", text="Thinking..."),
+            title="Agent",
+            border_style="purple",
+        ),
+        console=console,
+        refresh_per_second=10,
+    ) as live:
+        async with agent.run_stream(question) as response:
+            async for chunk in response.stream_text(delta=True):
+                content += chunk
 
-        with Live(
-            Panel(
-                Spinner("dots", text="Thinking..."),
-                title="Agent",
-                border_style="purple",
-            ),
-            console=console,
-            refresh_per_second=10,
-        ) as live:
-            async with agent.run_stream(question) as response:
-                async for chunk in response.stream_text(delta=True):
-                    content += chunk
+                # Only process new messages
+                messages = response.all_messages()
+                new_messages = messages[last_msg_len:]
+                last_msg_len = len(messages)
 
-                    # Only process new messages
-                    messages = response.all_messages()
-                    new_messages = messages[last_msg_len:]
-                    last_msg_len = len(messages)
+                # Check for new tool usage during streaming
+                for msg in new_messages:
+                    for part in getattr(msg, "parts", []):
+                        tool_name = getattr(part, "tool_name", None)
 
-                    # Check for new tool usage during streaming
-                    for msg in new_messages:
-                        for part in getattr(msg, "parts", []):
-                            tool_name = getattr(part, "tool_name", None)
+                        if tool_name and tool_name not in seen:
+                            seen.add(tool_name)
+                            tools_used.append(tool_name)
 
-                            if tool_name and tool_name not in seen:
-                                seen.add(tool_name)
-                                tools_used.append(tool_name)
+                tool_display = ""
 
-                    tool_display = ""
+                if tools_used:
+                    counts = Counter(tools_used)
 
-                    if tools_used:
-                        counts = Counter(tools_used)
-
-                        tool_display = "\n\nTools used: " + ", ".join(
-                            f"{tool} ({count})" if count > 1 else tool
-                            for tool, count in counts.items()
-                        )
-
-                    renderable = Group(
-                        Markdown(content + "▌"),
-                        Rule(style="dim") if tool_display else Text(""),
-                        Text(tool_display, style="dim") if tool_display else Text(""),
+                    tool_display = "\n\nTools used: " + ", ".join(
+                        f"{tool} ({count})" if count > 1 else tool
+                        for tool, count in counts.items()
                     )
 
-                    live.update(
-                        Panel(
-                            renderable,
-                            title="Agent",
-                            border_style="purple",
-                            padding=(1, 2),
-                        )
+                renderable = Group(
+                    Markdown(content),
+                    Rule(style="dim") if tool_display else Text(""),
+                    Text(tool_display, style="dim") if tool_display else Text(""),
+                )
+
+                live.update(
+                    Panel(
+                        renderable,
+                        title="Agent",
+                        border_style="purple",
+                        padding=(1, 2),
                     )
+                )
 
-    try:
-        # Reuse the same loop
-        _loop.run_until_complete(_stream())
-
-        conversation_history.append(("user", question))
-        conversation_history.append(("assistant", content[:300]))
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+    conversation_history.append(("user", question))
+    conversation_history.append(("assistant", content[:300]))
 
 
-@app.command()
-def chat():
+async def chat_loop():
     console.print(
         Panel(
             "[bold]RAG Agent - Personal Knowledge Base[/bold]\n"
@@ -119,7 +103,7 @@ def chat():
 
     while True:
         try:
-            user_input: str = session.prompt("\n[You] ").strip()
+            user_input: str = (await session.prompt_async("\n[You] ")).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Goodbye.[/dim]")
             break
@@ -133,7 +117,7 @@ def chat():
 
             from ingest import ingest
 
-            ingest(source, source_type)
+            await ingest(source, source_type)
 
         elif user_input == "/docs":
             from agent import _list_documents_impl
@@ -154,7 +138,15 @@ def chat():
             break
 
         else:
-            stream_answer(user_input)
+            try:
+                await stream_answer(user_input)
+            except Exception as e:
+                console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def chat():
+    asyncio.run(chat_loop())
 
 
 if __name__ == "__main__":

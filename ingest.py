@@ -44,7 +44,7 @@ async def embed_chunks_async(chunks, batch_size=20):
 
 
 @app.command()
-def ingest(source: str, source_type: str = "pdf"):
+async def ingest(source: str, source_type: str = "pdf"):
     if source_type == "pdf":
         loader = PyPDFLoader(source)
     else:
@@ -69,21 +69,18 @@ def ingest(source: str, source_type: str = "pdf"):
     ) as progress:
         task = progress.add_task(f"Embedding {source}...", total=len(chunks))
 
-        async def run():
-            embedded = await embed_chunks_async(chunks)
-            batch_size = 20
+        embedded = await embed_chunks_async(chunks)
+        batch_size = 20
 
-            for i in range(0, len(embedded), batch_size):
-                batch = embedded[i : i + batch_size]
-                vs._collection.add(
-                    ids=[str(hash(c.page_content)) for c, _ in batch],
-                    embeddings=[v for _, v in batch],
-                    documents=[c.page_content for c, _ in batch],
-                    metadatas=[c.metadata for c, _ in batch],
-                )
-                progress.advance(task, len(batch))
-
-        asyncio.run(run())
+        for i in range(0, len(embedded), batch_size):
+            batch = embedded[i : i + batch_size]
+            vs._collection.add(
+                ids=[str(hash(c.page_content)) for c, _ in batch],
+                embeddings=[v for _, v in batch],
+                documents=[c.page_content for c, _ in batch],
+                metadatas=[c.metadata for c, _ in batch],
+            )
+            progress.advance(task, len(batch))
 
     print(f"[green]Done. {len(chunks)} chunks ingested from {source}[/green]")
 
