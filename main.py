@@ -30,6 +30,7 @@ def stream_answer(question: str):
         content = ""
         tools_used = []
         seen = set()
+        last_msg_len = 0
 
         with Live(
             Panel(
@@ -44,8 +45,13 @@ def stream_answer(question: str):
                 async for chunk in response.stream_text(delta=True):
                     content += chunk
 
+                    # Only process new messages
+                    messages = response.all_messages()
+                    new_messages = messages[last_msg_len:]
+                    last_msg_len = len(messages)
+
                     # Check for new tool usage during streaming
-                    for msg in response.all_messages():
+                    for msg in new_messages:
                         for part in getattr(msg, "parts", []):
                             tool_name = getattr(part, "tool_name", None)
 
@@ -64,7 +70,7 @@ def stream_answer(question: str):
                         )
 
                     renderable = Group(
-                        Markdown(content),
+                        Markdown(content + "▌"),
                         Rule(style="dim") if tool_display else Text(""),
                         Text(tool_display, style="dim") if tool_display else Text(""),
                     )
@@ -81,6 +87,8 @@ def stream_answer(question: str):
     try:
         # Reuse the same loop
         _loop.run_until_complete(_stream())
+    except asyncio.CancelledError:
+        pass
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
 
