@@ -1,3 +1,4 @@
+import asyncio
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
@@ -21,6 +22,25 @@ CHROMA_PATH = "./chroma_db"
 def get_vectorstore():
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     return Chroma(persist_directory=CHROMA_PATH, embedding_function=embeddings)
+
+
+async def embed_chunks_async(chunks, batch_size=20):
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+
+    batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
+    texts = [[c.page_content for c in b] for b in batches]
+
+    # Send all embedding requests at once
+    results = await asyncio.gather(
+        *[embeddings_model.aembed_documents(t) for t in texts]
+    )
+
+    embedded = []
+    for batch, vectors in zip(batches, results):
+        for chunk, vector in zip(batch, vectors):
+            embedded.append((chunk, vector))
+
+    return embedded
 
 
 @app.command()
@@ -49,11 +69,21 @@ def ingest(source: str, source_type: str = "pdf"):
     ) as progress:
         task = progress.add_task(f"Embedding {source}...", total=len(chunks))
 
-        batch_size = 20
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i : i + batch_size]
-            vs.add_documents(batch)
-            progress.advance(task, len(batch))
+        async def run():
+            embedded = await embed_chunks_async(chunks)
+            batch_size = 20
+
+            for i in range(0, len(embedded), batch_size):
+                batch = embedded[i : i + batch_size]
+                vs._collection.add(
+                    ids=[str(hash(c.page_content)) for c, _ in batch],
+                    embeddings=[v for _, v in batch],
+                    documents=[c.page_content for c, _ in batch],
+                    metadatas=[c.metadata for c, _ in batch],
+                )
+                progress.advance(task, len(batch))
+
+        asyncio.run(run())
 
     print(f"[green]Done. {len(chunks)} chunks ingested from {source}[/green]")
 
