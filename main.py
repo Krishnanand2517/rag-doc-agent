@@ -20,6 +20,10 @@ from agent import agent  # noqa: E402
 console = Console()
 app = typer.Typer()
 
+# One persistent loop for the entire session
+_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(_loop)
+
 
 def stream_answer(question: str):
     async def _stream():
@@ -75,7 +79,8 @@ def stream_answer(question: str):
                     )
 
     try:
-        asyncio.run(_stream())
+        # Reuse the same loop
+        _loop.run_until_complete(_stream())
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
 
