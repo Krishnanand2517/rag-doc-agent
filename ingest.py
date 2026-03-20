@@ -3,6 +3,13 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from rich import print
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 import typer
 
 
@@ -31,8 +38,24 @@ def ingest(source: str, source_type: str = "pdf"):
     chunks = splitter.split_documents(docs)
 
     vs = get_vectorstore()
-    vs.add_documents(chunks)
-    print(f"[green]Ingested {len(chunks)} chunks from {source}[/green]")
+
+    print(f"[bold]Embedding {source}...[/bold]")
+
+    with Progress(
+        SpinnerColumn(),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("{task.completed}/{task.total} chunks"),
+    ) as progress:
+        task = progress.add_task(f"Embedding {source}...", total=len(chunks))
+
+        batch_size = 20
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i : i + batch_size]
+            vs.add_documents(batch)
+            progress.advance(task, len(batch))
+
+    print(f"[green]Done. {len(chunks)} chunks ingested from {source}[/green]")
 
 
 if __name__ == "__main__":
